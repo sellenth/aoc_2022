@@ -1,6 +1,9 @@
 import { readFileSync, promises as fsPromises } from 'fs';
 import { join } from 'path';
 
+//let test_input = `Valve AA has flow rate=0; tunnels lead to valves BB
+//Valve BB has flow rate=13; tunnels lead to valves CC, AA
+//Valve CC has flow rate=2; tunnels lead to valves BB`
 
 let test_input = `Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
 Valve BB has flow rate=13; tunnels lead to valves CC, AA
@@ -41,6 +44,7 @@ class Valve {
 let v_map: Record<string, Valve> = {}
 let i_to_v_map: Record<string, Valve> = {}
 let total_num_valves = 0
+let num_worth_opening = 0
 
 let valves = input.split('\n').forEach( (line, i) => {
   // Extract the valve name and flow rate
@@ -59,6 +63,9 @@ let valves = input.split('\n').forEach( (line, i) => {
   v_map[nameMatch] = new Valve(nameMatch, flowRate, tunnelValves, i)
   i_to_v_map[i] = v_map[nameMatch]
   total_num_valves++
+  if (flowRate > 0) {
+    num_worth_opening++
+  }
 } )
 
 let shortest_distances: number[][] = new Array(Object.keys(v_map).length)
@@ -66,85 +73,81 @@ for (let i = 0; i < shortest_distances.length; ++i){
   shortest_distances[i] = new Array(Object.keys(v_map).length).fill(Number(-1))
 }
 
-Object.values(v_map).forEach( (valve) => {
-  let i = valve.idx
+class State {
+  p_released = 0;
+  opened: string[] = [];
+  curr_valve: Valve;
+  t_remain: number;
+  num_worth_opening: number = 0;
 
-  valve.neighbors.forEach( (neighbor_name) => {
-    let neighbor_idx = v_map[neighbor_name].idx
-    shortest_distances[i][neighbor_idx] = 1
-  } )
-  shortest_distances[i][i] = 0
-} )
+  constructor(p: number, opened: string[], valve: Valve, time: number, n_worth_opening: number) {
+    this.p_released = p
+    this.opened = opened
+    this.curr_valve = valve
+    this.t_remain = time
+    this.num_worth_opening = n_worth_opening
+  }
 
-for (let i = 0; i < total_num_valves; ++i) {
-  for (let j = 0; j < total_num_valves; ++j) {
-    if (j == i) continue
+  add_children(arr: State[]) {
+    // add current valve as an option to open (only if it hasn't been opened before)
+    if (this.curr_valve.rate > 0 && !this.opened.includes(this.curr_valve.name)) {
+      let new_t = this.t_remain - 1
 
-    let d_src_to_other = shortest_distances[i][j]
-    if (d_src_to_other != -1) {
-      for (let k = 0; k < total_num_valves; ++k){
-        if (k == i) continue
-        let d_other_to_other = shortest_distances[j][k]
-        if (d_other_to_other > 0 && (d_other_to_other + d_src_to_other < shortest_distances[i][k] || shortest_distances[i][k] == -1)) {
-          shortest_distances[i][k] = d_other_to_other + d_src_to_other
-        }
-      }
+      arr.push(new State(
+        this.p_released + new_t * this.curr_valve.rate,
+        [...this.opened, this.curr_valve.name],
+        this.curr_valve,
+        new_t,
+        this.num_worth_opening + 1
+      ))
+    }
+
+    this.curr_valve.neighbors.forEach( (neighbor) => {
+      let new_t = this.t_remain - 1
+
+      arr.push(new State(
+        this.p_released,
+        [...this.opened],
+        v_map[neighbor],
+        new_t,
+        this.num_worth_opening
+      ))
+    } )
+  }
+}
+
+let root = new State(0, [], v_map['AA'], 30, 0)
+
+let nodes: State[] = []
+let curr_node: State | undefined = root
+let limit = 100000
+
+let best_release = 0
+
+while (curr_node) {
+  limit--
+  //console.log(limit, nodes.length)
+  //console.log(curr_node)
+  //console.log('\n\n')
+
+  if (curr_node.num_worth_opening == num_worth_opening) {
+    if (curr_node.p_released > best_release) {
+      best_release = curr_node.p_released
+      console.log('opened all the valves with pressure release of ', curr_node.p_released)
     }
   }
-}
-
-process.stdout.write('\t')
-for (let i = 0; i < shortest_distances.length; ++i){
-  process.stdout.write(`\t${Object.keys(v_map)[i]}`)
-}
-process.stdout.write('\n')
-
-for (let i = 0; i < shortest_distances.length; ++i){
-  process.stdout.write(`\t${Object.keys(v_map)[i]}`)
-  for (let j = 0; j < shortest_distances.length; ++j){
-    process.stdout.write(`\t${shortest_distances[i][j]}`)
+  else if (curr_node.t_remain > 0) {
+    curr_node.add_children(nodes)
   }
-  process.stdout.write('\n')
-}
-
-let curr = v_map['AA']
-let opened_idxs: number[] = []
-let t_remain = 30
-let pressure_released = 0
-
-while (t_remain > 0 && opened_idxs.length != total_num_valves) {
-  let p_release_opening_others = new Array(total_num_valves).fill(0)
-  for (let i = 0; i < total_num_valves; ++i) {
-    let time_to_get_to_other = shortest_distances[curr.idx][i]
-    if (!opened_idxs.includes(i)) {
-      p_release_opening_others[i] = i_to_v_map[i].rate * (t_remain - time_to_get_to_other - 1)
+  else {
+    if (curr_node.p_released > best_release) {
+      best_release = curr_node.p_released
+      console.log('reached end with pressure release of ', curr_node.p_released)
     }
+
   }
 
-  let max_p = 0;
-  let max_p_idx = -1
-  for (let i = 0; i < total_num_valves; ++i) {
-    if (p_release_opening_others[i] > max_p) {
-      max_p = p_release_opening_others[i]
-
-      max_p_idx = i
-    }
-  }
-
-  console.log(max_p)
-  console.log(i_to_v_map[max_p_idx])
-
-  if (max_p_idx == -1)
-    break
-  else if (max_p_idx == curr.idx) {
-    opened_idxs.push(max_p_idx)
-    t_remain--;
-  }
-
-  break
-  //else {
-  //  curr = neighbor_in_shortest_path_to(i_to_v_map[max_p_idx])
-  //}
-
-  t_remain--
+  curr_node = nodes.pop()
 }
+
+console.log(best_release)
