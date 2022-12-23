@@ -2,8 +2,7 @@ import { readFileSync, promises as fsPromises } from 'fs';
 import { join } from 'path';
 
 //let test_input = `Valve AA has flow rate=0; tunnels lead to valves BB
-//Valve BB has flow rate=13; tunnels lead to valves CC, AA
-//Valve CC has flow rate=2; tunnels lead to valves BB`
+//Valve BB has flow rate=1; tunnels lead to valves AA`
 
 let test_input = `Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
 Valve BB has flow rate=13; tunnels lead to valves CC, AA
@@ -23,30 +22,28 @@ function syncReadFile(filename: string) {
 
 let real_input = syncReadFile('./input.txt');
 
-let testing = true
+let testing = false
 let input = testing ? test_input : real_input;
 
 class Valve {
   name: string
   rate: number
   neighbors: string[]
-  idx: number
 
-  constructor(name: string, rate: number, neighbors: string[], idx: number)
+  constructor(name: string, rate: number, neighbors: string[])
   {
     this.name = name
     this.rate = rate
     this.neighbors = neighbors
-    this.idx = idx
   }
 }
 
-let v_map: Record<string, Valve> = {}
-let i_to_v_map: Record<string, Valve> = {}
-let total_num_valves = 0
+let str_to_idx: Record<string, number> = {}
+
+let valves: Valve[] = []
 let num_worth_opening = 0
 
-let valves = input.split('\n').forEach( (line, i) => {
+input.split('\n').forEach( (line) => {
   // Extract the valve name and flow rate
   let [first, second] = line.split(';')
 
@@ -60,94 +57,55 @@ let valves = input.split('\n').forEach( (line, i) => {
   const tunnelMatch = second.match(tunnelRegex);
   const tunnelValves = tunnelMatch!
 
-  v_map[nameMatch] = new Valve(nameMatch, flowRate, tunnelValves, i)
-  i_to_v_map[i] = v_map[nameMatch]
-  total_num_valves++
+  valves.push(new Valve(nameMatch, flowRate, tunnelValves))
   if (flowRate > 0) {
     num_worth_opening++
   }
 } )
 
-let shortest_distances: number[][] = new Array(Object.keys(v_map).length)
-for (let i = 0; i < shortest_distances.length; ++i){
-  shortest_distances[i] = new Array(Object.keys(v_map).length).fill(Number(-1))
+valves = valves.sort( (a, b) => b.rate - a.rate )
+valves.forEach( (valve, i) => {
+  str_to_idx[valve.name] = i
+})
+
+let DP_table: number[] = new Array( num_worth_opening * valves.length * 31 ).fill(-1)
+
+function solve(curr_valve_idx: number, opened: number, time: number) {
+  if (time == 0)
+    return 0
+
+  let key = (opened * valves.length * 31) +
+            (curr_valve_idx * 31) +
+            (time)
+
+  let state_lookup = DP_table[key]
+  if (state_lookup > -1)
+    return state_lookup
+
+  let ans = 0
+
+  let already_opened = ((1 << curr_valve_idx) & opened)
+  let curr_valve = valves[curr_valve_idx]
+  let curr_rate = curr_valve.rate
+  if (!already_opened && curr_rate > 0) {
+    ans = Math.max(ans, (time - 1) * curr_rate + solve(curr_valve_idx,
+                              opened + (1 << curr_valve_idx),
+                              time - 1,
+                              ))
+  }
+
+  if (curr_valve.neighbors.length) {
+    curr_valve.neighbors.forEach( (neighbor) => {
+      ans = Math.max(ans, solve( str_to_idx[neighbor],
+                                 opened,
+                                 time - 1,
+                                 ))
+    })
+  }
+
+  DP_table[key] = ans;
+
+  return ans;
 }
 
-class State {
-  p_released = 0;
-  opened: string[] = [];
-  curr_valve: Valve;
-  t_remain: number;
-  num_worth_opening: number = 0;
-
-  constructor(p: number, opened: string[], valve: Valve, time: number, n_worth_opening: number) {
-    this.p_released = p
-    this.opened = opened
-    this.curr_valve = valve
-    this.t_remain = time
-    this.num_worth_opening = n_worth_opening
-  }
-
-  add_children(arr: State[]) {
-    // add current valve as an option to open (only if it hasn't been opened before)
-    if (this.curr_valve.rate > 0 && !this.opened.includes(this.curr_valve.name)) {
-      let new_t = this.t_remain - 1
-
-      arr.push(new State(
-        this.p_released + new_t * this.curr_valve.rate,
-        [...this.opened, this.curr_valve.name],
-        this.curr_valve,
-        new_t,
-        this.num_worth_opening + 1
-      ))
-    }
-
-    this.curr_valve.neighbors.forEach( (neighbor) => {
-      let new_t = this.t_remain - 1
-
-      arr.push(new State(
-        this.p_released,
-        [...this.opened],
-        v_map[neighbor],
-        new_t,
-        this.num_worth_opening
-      ))
-    } )
-  }
-}
-
-let root = new State(0, [], v_map['AA'], 30, 0)
-
-let nodes: State[] = []
-let curr_node: State | undefined = root
-let limit = 100000
-
-let best_release = 0
-
-while (curr_node) {
-  limit--
-  //console.log(limit, nodes.length)
-  //console.log(curr_node)
-  //console.log('\n\n')
-
-  if (curr_node.num_worth_opening == num_worth_opening) {
-    if (curr_node.p_released > best_release) {
-      best_release = curr_node.p_released
-      console.log('opened all the valves with pressure release of ', curr_node.p_released)
-    }
-  }
-  else if (curr_node.t_remain > 0) {
-    curr_node.add_children(nodes)
-  }
-  else {
-    if (curr_node.p_released > best_release) {
-      best_release = curr_node.p_released
-      console.log('reached end with pressure release of ', curr_node.p_released)
-    }
-
-  }
-
-  curr_node = nodes.pop()
-}
-
-console.log(best_release)
+console.log(solve(str_to_idx['AA'], 0, 30 ))
