@@ -70,9 +70,9 @@ valves.forEach( (valve, i) => {
 
 let DP_table: number[] = new Array( num_worth_opening * valves.length * 31 ).fill(-1)
 
-function solve(curr_valve_idx: number, opened: number, time: number) {
+function solve(curr_valve_idx: number, opened: number, time: number, p_release: number) {
   if (time == 0)
-    return 0
+    return p_release
 
   let key = (opened * valves.length * 31) +
             (curr_valve_idx * 31) +
@@ -88,9 +88,10 @@ function solve(curr_valve_idx: number, opened: number, time: number) {
   let curr_valve = valves[curr_valve_idx]
   let curr_rate = curr_valve.rate
   if (!already_opened && curr_rate > 0) {
-    ans = Math.max(ans, (time - 1) * curr_rate + solve(curr_valve_idx,
+    ans = Math.max(ans, solve(curr_valve_idx,
                               opened + (1 << curr_valve_idx),
                               time - 1,
+                              (time - 1) * curr_rate + p_release
                               ))
   }
 
@@ -99,6 +100,7 @@ function solve(curr_valve_idx: number, opened: number, time: number) {
       ans = Math.max(ans, solve( str_to_idx[neighbor],
                                  opened,
                                  time - 1,
+                                 p_release
                                  ))
     })
   }
@@ -108,4 +110,4 @@ function solve(curr_valve_idx: number, opened: number, time: number) {
   return ans;
 }
 
-console.log(solve(str_to_idx['AA'], 0, 30 ))
+console.log(solve(str_to_idx['AA'], 0, 30, 0 ))

@@ -12,7 +12,7 @@ function syncReadFile(filename: string) {
 
 let real_input = syncReadFile('./input.txt');
 
-let testing = true
+let testing = false
 let input = testing ? test_input : real_input;
 
 function assert(condition: any, msg?: string): asserts condition {
@@ -62,8 +62,8 @@ function find_max_geodes(time_left: number,
 
 
 
-  let n = time_left
-  let geode_upper_threshold = geodes + (n**2 + n) / 2
+  let n = time_left + num_geode_r
+  let geode_upper_threshold = geodes + (n * (n-1) / 2)
   if (geode_upper_threshold < geode_best_for_this_blueprint) {
     return 0
   }

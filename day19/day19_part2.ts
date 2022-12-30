@@ -13,7 +13,7 @@ function syncReadFile(filename: string) {
 
 let real_input = syncReadFile('./input.txt');
 
-let testing = false
+let testing = true
 let input = testing ? test_input : real_input;
 
 type ore = number
@@ -76,7 +76,6 @@ function find_max_geodes_DFS(b: Blueprint) {
     // If we're out of time, check if we've created a new max
     if (curr.time_left <= 0) {
       if (curr.time_left == 0 && curr.geode > best) {
-        console.log(`found new max with ${curr.geode_bots} geode bots`)
         best = curr.geode
       }
       continue
@@ -84,8 +83,8 @@ function find_max_geodes_DFS(b: Blueprint) {
 
     // Optimistically assume we can create a new geode bot every turn
     // if that still yields fewer bots than our best, don't consider this state
-    let n = curr.time_left
-    if (curr.geode + curr.geode_bots + (n ** 3) < best) {
+    let n = curr.time_left + curr.geode_bots
+    if (curr.geode + (n * (n - 1) / 2) < best) {
       continue
     }
 
@@ -119,7 +118,7 @@ function find_max_geodes_DFS(b: Blueprint) {
     }
 
     // Create an obsidian bot
-    if (curr.clay_bots > 0)
+    if (curr.obs_bots < b.max_needed_obs_bots && curr.clay_bots > 0)
     {
         //continue
 
@@ -151,6 +150,7 @@ function find_max_geodes_DFS(b: Blueprint) {
     }
 
     // Create a clay bot
+    if (curr.clay_bots < b.max_needed_clay_bots)
     {
 
       let time_til_bot = curr.ore >= b.clay_r ? 1
@@ -212,7 +212,7 @@ function find_max_geodes_DFS(b: Blueprint) {
 
 let ans = 1
 
-for (let i = 0; i < 3; ++i) {
+for (let i = 0; i < 1; ++i) {
   console.time(`t${i+1}`)
   let b = blueprints[i]
 
