@@ -11,5 +11,5 @@ function syncReadFile(filename: string) {
 
 let real_input = syncReadFile('./input.txt');
 
-let testing = true
-let input = testing ? test_input : real_input;
+let example = true
+let input = example ? test_input : real_input;
