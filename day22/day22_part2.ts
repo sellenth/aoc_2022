@@ -25,6 +25,7 @@ function syncReadFile(filename: string) {
 let real_input = syncReadFile('./input.txt');
 
 let testing = true
+let stride = testing ? 4 : 50
 let input = testing ? test_input : real_input;
 
 let [map_part, moves_list] = input.split('\n\n')
@@ -35,7 +36,10 @@ let map= map_part.split('\n').map( (line) => line.split('') )
 function display_map() {
   for (let i = 0; i < map.length; ++i) {
     for (let j = 0; j < map[i].length; ++j) {
-      process.stdout.write(map[i][j])
+      if (p.state.row == i && p.state.col == j){
+        process.stdout.write('X')
+      } else
+        process.stdout.write(map[i][j])
     }
     console.log()
   }
@@ -93,21 +97,122 @@ function bottom_row_of(region: number) {
   return top_row_of(region) + 3
 }
 
-enum Dir {
-  R = 0,
-  D,
-  L,
-  U
+class State {
+  row: number
+  col: number
+  dir: Dir
+
+  constructor(d: Dir, r: number, c: number) {
+    this.dir = d
+    this.row = r
+    this.col = c
+  }
+
+  getHash() {
+    return [this.dir, this.row, this.col].join(',')
+  }
+
+  blocked() {
+    return map[this.row][this.col] == '#'
+  }
+
+  equals(other: State) {
+    return this.row == other.row
+      && this.col == other.col
+      && this.dir == other.dir
+
+  }
 }
 
-let d = Dir.U
+let edges: Record<string, State> = {}
+
+function gen_list(d: Dir, r_start: number, r_amt: number, c_start: number, c_amt: number) {
+  let list: State[] = []
+
+  if (r_amt) {
+    let end_cond = r_start + r_amt
+    for (; r_start != end_cond; r_start += Math.sign(r_amt)) {
+      list.push(new State(d, r_start, c_start))
+    }
+  } else {
+    let end_cond = c_start + c_amt
+    for (; c_start != end_cond; c_start += Math.sign(c_amt)) {
+      list.push(new State(d, r_start, c_start))
+    }
+  }
+
+  return list
+}
+
+enum Dir {
+  R = 0,
+  D = 1,
+  L = 2,
+  U = 3
+}
+
+function flip_dir(dir: Dir) {
+  return (dir + 2) % 4
+}
+
+function insert_inverse(from: State, to: State) {
+  let new_from = new State(flip_dir(to.dir), to.row, to.col)
+  let new_to   = new State(flip_dir(from.dir), from.row, from.col)
+  edges[new_from.getHash()] = new_to
+}
+
+function populate_edges(from_states: State[], to_states: State[]) {
+  from_states.map( (from: State, i: number) => {
+    edges[from.getHash()] = to_states[i]
+    insert_inverse(from, to_states[i])
+  } )
+}
+
+//populate edges map
+
+if (testing) {
+  // bottom of 2 to 5
+  let a = gen_list(Dir.D, bottom_row_of(2), 0, left_col_of(2), stride)
+  let b = gen_list(Dir.U, bottom_row_of(5), 0, right_col_of(5), -stride)
+  populate_edges(a, b)
+
+  // bottom of 3 to 5
+  a = gen_list(Dir.D, bottom_row_of(3), 0, left_col_of(3), stride)
+  b = gen_list(Dir.R, bottom_row_of(5), -stride, left_col_of(5), 0)
+  populate_edges(a, b)
+
+  // bottom of 6 to 2
+  a = gen_list(Dir.D, bottom_row_of(6), 0, left_col_of(6), stride)
+  b = gen_list(Dir.R, bottom_row_of(2), -stride, left_col_of(2), 0)
+  populate_edges(a, b)
+
+  // right of 6 to 1
+  a = gen_list(Dir.R, bottom_row_of(6), -stride, right_col_of(6), 0)
+  b = gen_list(Dir.L, top_row_of(1), +stride, right_col_of(1), 0)
+  populate_edges(a, b)
+
+  //untested
+
+  // top of 6 to 4
+  a = gen_list(Dir.U, top_row_of(6), 0, left_col_of(6), stride)
+  b = gen_list(Dir.L, bottom_row_of(4), -stride, right_col_of(4), 0)
+  populate_edges(a, b)
+
+  // top of 1 to 2
+  a = gen_list(Dir.U, top_row_of(1), 0, left_col_of(1), stride)
+  b = gen_list(Dir.D, top_row_of(2), 0, right_col_of(2), -stride)
+  populate_edges(a, b)
+
+  // left of 1 to 3
+  a = gen_list(Dir.L, top_row_of(1), +stride, left_col_of(1), 0)
+  b = gen_list(Dir.D, top_row_of(3), 0, left_col_of(3), stride)
+  populate_edges(a, b)
+}
 
 type Turn = 'R' | 'L'
 
 class Player {
-  row: number = -1
-  col: number = -1
-  dir: Dir = Dir.R
+  state: State = new State(0, 0, 0)
   map: string[][]
   moves: string[]
   stride: number = 4
@@ -121,8 +226,9 @@ class Player {
     for (let i = 0; i < map.length; ++i) {
       for (let j = 0; j < map[i].length; ++j) {
         if (map[i][j] == '.') {
-          this.row = i
-          this.col = j
+          this.state.row = i
+          this.state.col = j
+          this.state.dir = Dir.R
           return
         }
       }
@@ -144,170 +250,66 @@ class Player {
   }
 
   move_in_dir() {
-    switch (this.dir) {
+    switch (this.state.dir) {
       case Dir.R:
         return this.move_r()
-
       case Dir.L:
         return this.move_l()
-
       case Dir.D:
         return this.move_d()
-
       case Dir.U:
         return this.move_u()
     }
   }
 
-
-  blocked(r: number, c: number) {
-    return map[r][c] == '#'
-  }
-
-  move_d() {
-    let test_r = this.row + 1
-    let test_c = this.col
-
-    { // bottom of 2 (to 5)
-      let left_lim = left_col_of(2)
-      let right_lim = right_col_of(2)
-      if (in_range(test_c, left_lim, right_lim) && test_r == bottom_row_of(2) + 1) {
-        let c_from_left = test_c - left_lim
-        let r = bottom_row_of(5)
-        let c = right_col_of(5) - c_from_left
-        if (this.blocked(r, c)) {
-          return -1
-        } else {
-          this.dir = Dir.U
-          this.col = c
-          this.row = r
-          return 1
-        }
-      }
-
-    }
-
-    { // bottom of 3 (to 5)
-      let left_lim = left_col_of(3)
-      let right_lim = right_col_of(3)
-      if (in_range(test_c, left_lim, right_lim) && test_r == bottom_row_of(3) + 1) {
-        let c_from_left = test_c - left_lim
-        let r = bottom_row_of(5) - c_from_left
-        let c = left_col_of(5)
-        if (this.blocked(r, c)) {
-          return -1
-        } else {
-          this.dir = Dir.R
-          this.col = c
-          this.row = r
-          return 1
-        }
-      }
-    }
-
-    { // bottom of 5 (to 2)
-      let left_lim = left_col_of(5)
-      let right_lim = right_col_of(5)
-      if (in_range(test_c, left_lim, right_lim) && test_r == bottom_row_of(5) + 1) {
-        let c_from_left = test_c - left_lim
-        let r = bottom_row_of(2)
-        let c = right_col_of(2) - c_from_left
-        if (this.blocked(r, c)) {
-          return -1
-        } else {
-          this.dir = Dir.U
-          this.col = c
-          this.row = r
-          return 1
-        }
-      }
-    }
-
-    return 1
-  }
-
-  move_u() {
-    // walk off the top
-    if ( this.row - 1 < 0 ||
-         this.col >= this.map[this.row - 1].length ||
-         this.map[this.row - 1][this.col] == ' '
-         ) {
-      for (let i = this.map.length - 1; i > this.row; --i) {
-        if (this.col >= this.map[i].length) {
-          continue
-        }
-        if (this.map[i][this.col] == '#')
-          return -1
-        if (this.map[i][this.col] == '.') {
-          this.row = i
-          return 1
-        }
-      }
-      console.log('interesting1')
-      return 0
-    }
-
-    else if (this.map[this.row-1][this.col] == '#') {
-      return -1
-    }
-
-    this.row-=1
-    return 1
+  move_r() {
+    return this.move(0, 1)
   }
 
   move_l() {
-    let line = this.map[this.row]
-    if (this.col - 1 < 0 || line[this.col - 1] == ' ') {
-      for (let i = line.length - 1; i > this.col; --i) {
-        if (line[i] == '#')
-          return -1
-        if (line[i] == '.') {
-          this.col = i
-          return 1
-        }
-      }
-      console.log('interesting2')
-      return 0
-    }
-
-    else if (line[this.col - 1] == '#') {
-      return -1
-    }
-
-    this.col-=1
-    return 1
+    return this.move(0, -1)
   }
 
-  move_r() {
-    let line = this.map[this.row]
-    if (this.col + 1 >= line.length || line[this.col + 1] == ' ') {
-      for (let i = 0; i < this.col; ++i) {
-        if (line[i] == '#')
-          return -1
-        if (line[i] == '.') {
-          this.col = i
-          return 1
-        }
-      }
-      console.log('interesting3')
-      return 0
+  move_u() {
+    return this.move(-1, 0)
+  }
+
+  move_d() {
+    return this.move(1, 0)
+  }
+
+
+  move(r_inc: number, c_inc: number) {
+    let new_dir
+    if (r_inc == 1) new_dir = Dir.D
+    else if (r_inc == -1) new_dir = Dir.U
+    else if (c_inc == 1) new_dir = Dir.R
+    else new_dir = Dir.L
+
+    let hash = this.state.getHash()
+    let new_state: State;
+    if (hash in edges) {
+      new_state = edges[hash]
+    } else {
+      new_state = new State(new_dir, this.state.row + r_inc, this.state.col + c_inc)
     }
 
-    if (line[this.col + 1] == '#') {
+
+    if (new_state.blocked())
       return -1
+    else {
+      this.state = new_state
+      return 1
     }
-
-    this.col+=1
-    return 1
   }
 
   turn(turn: Turn) {
     if (turn == 'R') {
-      this.dir = (this.dir + 1) % 4
+      this.state.dir = (this.state.dir + 1) % 4
     } else {
-      this.dir-=1
-      if (this.dir < 0)
-        this.dir = 3
+      this.state.dir-=1
+      if (this.state.dir < 0)
+        this.state.dir = 3
     }
   }
 }
@@ -321,69 +323,88 @@ function assert(a: boolean, msg: string) {
 
 let p = new Player(map)
 
-{ // Test bottom 2
-  p.row = bottom_row_of(2)
-  p.col = left_col_of(2)
-  p.dir = -1
-  p.move_d()
-  assert(p.row == bottom_row_of(5)
-    && p.col == right_col_of(5)
-    && p.dir == Dir.U, "bottom 2 not working")
-}
-
-{ // Test bottom 3
-  p.row = bottom_row_of(3)
-  p.col = left_col_of(3) + 1
-  p.dir = -1
-  p.move_d()
-  assert(p.row == bottom_row_of(5) - 1
-    && p.col == left_col_of(5)
-    && p.dir == Dir.R, "bottom 3 not working")
-}
-
-{ // Test bottom 5
-  p.row = bottom_row_of(5)
-  p.col = left_col_of(5) + 1
-  p.dir = -1
-  p.move_d()
-  assert(p.row == bottom_row_of(2)
-    && p.col == right_col_of(2) - 1
-    && p.dir == Dir.U, "bottom 5 not working")
-}
-
-
-
-// p.perform_moves()
-//console.log((p.row + 1) * 1000 + (p.col + 1) * 4 + p.dir as Number)
-
 /*
-class Cube {
-  front: string[][] = []
-  back: string[][] = []
-  up: string[][] = []
-  right: string[][] = []
-  down: string[][] = []
-  left: string[][] = []
-  row_start: number = -1
-  col_start: number = -1
+{ // Test bottom 2 & bottom 5
+  let orig_row = bottom_row_of(2)
+  let orig_col = left_col_of(2)
+  p.state.row = orig_row
+  p.state.col = orig_col
+  p.state.dir = Dir.D
+  p.move_d()
+  assert(p.state.equals(new State(Dir.U,
+                                  bottom_row_of(5),
+                                  right_col_of(5)))
+         , "bottom 2 not working")
+
+  p.state.dir = Dir.D
+  p.move_d()
+  assert(p.state.equals(new State(Dir.U,
+                                  orig_row,
+                                  orig_col))
+         , "bottom 5 not working")
 }
 
-function splice_map(start_row: number, start_col: number) {
-  let sz = testing ? 4 : 50
+{ // Test bottom 3 & left 5
+  let orig_row = bottom_row_of(3)
+  let orig_col = left_col_of(3)
+  p.state.row = orig_row
+  p.state.col = orig_col
+  p.state.dir = Dir.D
+  p.move_d()
+  assert(p.state.equals(new State(Dir.R,
+                                  bottom_row_of(5),
+                                  left_col_of(5)))
+         , "bottom 3 not working")
 
-  let map: string[][] = []
-  for (let i = start_row; i < start_row + sz; ++i) {
-    map.push([])
-    for (let j = start_col; j < start_col + sz; ++j) {
-      map.at(-1)!.push(map_chars[i][j])
-    }
-  }
-
-  return map
+  p.state.dir = Dir.L
+  p.move_l()
+  assert(p.state.equals(new State(Dir.U,
+                                  orig_row,
+                                  orig_col))
+         , "bottom 5 not working")
 }
-let front = new CubeFace()
 
-front.curr = splice_map(4, 8)
+{ // Test bottom 6 & left 2
+  let orig_row = bottom_row_of(6)
+  let orig_col = left_col_of(6)
+  p.state.row = orig_row
+  p.state.col = orig_col
+  p.state.dir = Dir.D
+  p.move_d()
+  assert(p.state.equals(new State(Dir.R,
+                                  bottom_row_of(2),
+                                  left_col_of(2)))
+         , "bottom 6 not working")
 
-console.log(front)
-*/
+  p.state.dir = Dir.L
+  p.move_l()
+  assert(p.state.equals(new State(Dir.U,
+                                  orig_row,
+                                  orig_col))
+         , "left 2 not working")
+}
+
+{ // Test right 6 & right 1
+  let orig_row = bottom_row_of(6) - 1
+  let orig_col = right_col_of(6)
+  p.state.row = orig_row
+  p.state.col = orig_col
+  p.state.dir = Dir.R
+  p.move_r()
+
+  assert(p.state.equals(new State(Dir.L,
+                                  top_row_of(1) + 1,
+                                  right_col_of(1)))
+         , "right 6 not working")
+
+  p.state.dir = Dir.R
+  p.move_r()
+  assert(p.state.equals(new State(Dir.L,
+                                  orig_row,
+                                  orig_col))
+         , "right 1 not working")
+}*/
+
+p.perform_moves()
+display_map()
+console.log((p.state.row + 1) * 1000 + (p.state.col + 1) * 4 + p.state.dir as Number)
