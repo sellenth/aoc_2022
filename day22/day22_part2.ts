@@ -2,7 +2,7 @@ import { readFileSync, promises as fsPromises } from 'fs';
 import { join } from 'path';
 
 
-let test_input = `        ...#
+let ex_input = `        ...#
         .#..
         #...
         ....
@@ -24,9 +24,9 @@ function syncReadFile(filename: string) {
 
 let real_input = syncReadFile('./input.txt');
 
-let testing = true
-let stride = testing ? 4 : 50
-let input = testing ? test_input : real_input;
+let example = false
+let stride = example ? 4 : 50
+let input = example ? ex_input : real_input;
 
 let [map_part, moves_list] = input.split('\n\n')
 
@@ -52,17 +52,17 @@ function in_range(x: number, l: number, r: number) {
 function left_col_of(region: number): number {
   switch (region) {
       case 1:
-        return 8
+        return example ? 2 * stride : stride
       case 2:
-        return 0
+        return example ? 0 * stride : 2 * stride
       case 3:
-        return 4
+        return example ? 1 * stride : stride
       case 4:
-        return 8
+        return example ? 2 * stride : stride
       case 5:
-        return 8
+        return example ? 2 * stride : 0
       case 6:
-        return 12
+        return example ? 3 * stride : 0
       default:
         console.log("shouldn't be here")
         return -1
@@ -70,23 +70,23 @@ function left_col_of(region: number): number {
 }
 
 function right_col_of(region: number) {
-  return left_col_of(region) + 3
+  return left_col_of(region) + stride - 1
 }
 
 function top_row_of(region: number): number {
   switch (region) {
       case 1:
-        return 0
+        return example ? 0 : 0
       case 2:
-        return 4
+        return example ? 4 : 0
       case 3:
-        return 4
+        return example ? 4 : stride
       case 4:
-        return 4
+        return example ? 4 : 2 * stride
       case 5:
-        return 8
+        return example ? 8 : 2 * stride
       case 6:
-        return 8
+        return example ? 8 : 3 * stride
       default:
         console.log("shouldn't be here")
         return -1
@@ -94,7 +94,7 @@ function top_row_of(region: number): number {
 }
 
 function bottom_row_of(region: number) {
-  return top_row_of(region) + 3
+  return top_row_of(region) + stride - 1
 }
 
 class State {
@@ -170,7 +170,7 @@ function populate_edges(from_states: State[], to_states: State[]) {
 
 //populate edges map
 
-if (testing) {
+if (example) {
   // bottom of 2 to 5
   let a = gen_list(Dir.D, bottom_row_of(2), 0, left_col_of(2), stride)
   let b = gen_list(Dir.U, bottom_row_of(5), 0, right_col_of(5), -stride)
@@ -206,6 +206,46 @@ if (testing) {
   // left of 1 to 3
   a = gen_list(Dir.L, top_row_of(1), +stride, left_col_of(1), 0)
   b = gen_list(Dir.D, top_row_of(3), 0, left_col_of(3), stride)
+  populate_edges(a, b)
+}
+else {
+  // populate edges for real input
+  // +stride is down, right
+  // -stride is up, left
+
+  // top of 1 to 6
+  let a = gen_list(Dir.U, top_row_of(1), 0, left_col_of(1), stride)
+  let b = gen_list(Dir.R, top_row_of(6), +stride, left_col_of(6), 0)
+  populate_edges(a, b)
+
+  // top of 2 to 6
+  a = gen_list(Dir.U, top_row_of(2), 0, left_col_of(2), stride)
+  b = gen_list(Dir.U, bottom_row_of(6), 0, left_col_of(6), +stride)
+  populate_edges(a, b)
+
+  // right of 2 to 4
+  a = gen_list(Dir.R, top_row_of(2), +stride, right_col_of(2), 0)
+  b = gen_list(Dir.L, bottom_row_of(4), -stride, right_col_of(4), 0)
+  populate_edges(a, b)
+
+  // bottom of 2 to 3
+  a = gen_list(Dir.D, bottom_row_of(2), 0, left_col_of(2), +stride)
+  b = gen_list(Dir.L, top_row_of(3), +stride, right_col_of(3), 0)
+  populate_edges(a, b)
+
+  // bottom of 4 to 6
+  a = gen_list(Dir.D, bottom_row_of(4), 0, left_col_of(4), +stride)
+  b = gen_list(Dir.L, top_row_of(6), +stride, right_col_of(6), 0)
+  populate_edges(a, b)
+
+  // left of 5 to 1
+  a = gen_list(Dir.L, top_row_of(5), +stride, left_col_of(5), 0)
+  b = gen_list(Dir.R, bottom_row_of(1), -stride, left_col_of(1), 0)
+  populate_edges(a, b)
+
+  // top of 5 to 3
+  a = gen_list(Dir.U, top_row_of(5), 0, left_col_of(5), +stride)
+  b = gen_list(Dir.R, top_row_of(3), +stride, left_col_of(3), 0)
   populate_edges(a, b)
 }
 
@@ -323,87 +363,89 @@ function assert(a: boolean, msg: string) {
 
 let p = new Player(map)
 
-/*
-{ // Test bottom 2 & bottom 5
-  let orig_row = bottom_row_of(2)
-  let orig_col = left_col_of(2)
-  p.state.row = orig_row
-  p.state.col = orig_col
-  p.state.dir = Dir.D
-  p.move_d()
-  assert(p.state.equals(new State(Dir.U,
-                                  bottom_row_of(5),
-                                  right_col_of(5)))
-         , "bottom 2 not working")
+// tests
+if (false) {
+  { // Test bottom 2 & bottom 5
+    let orig_row = bottom_row_of(2)
+    let orig_col = left_col_of(2)
+    p.state.row = orig_row
+    p.state.col = orig_col
+    p.state.dir = Dir.D
+    p.move_d()
+    assert(p.state.equals(new State(Dir.U,
+                                    bottom_row_of(5),
+                                    right_col_of(5)))
+           , "bottom 2 not working")
 
-  p.state.dir = Dir.D
-  p.move_d()
-  assert(p.state.equals(new State(Dir.U,
-                                  orig_row,
-                                  orig_col))
-         , "bottom 5 not working")
+    p.state.dir = Dir.D
+    p.move_d()
+    assert(p.state.equals(new State(Dir.U,
+                                    orig_row,
+                                    orig_col))
+           , "bottom 5 not working")
+  }
+
+  { // Test bottom 3 & left 5
+    let orig_row = bottom_row_of(3)
+    let orig_col = left_col_of(3)
+    p.state.row = orig_row
+    p.state.col = orig_col
+    p.state.dir = Dir.D
+    p.move_d()
+    assert(p.state.equals(new State(Dir.R,
+                                    bottom_row_of(5),
+                                    left_col_of(5)))
+           , "bottom 3 not working")
+
+    p.state.dir = Dir.L
+    p.move_l()
+    assert(p.state.equals(new State(Dir.U,
+                                    orig_row,
+                                    orig_col))
+           , "bottom 5 not working")
+  }
+
+  { // Test bottom 6 & left 2
+    let orig_row = bottom_row_of(6)
+    let orig_col = left_col_of(6)
+    p.state.row = orig_row
+    p.state.col = orig_col
+    p.state.dir = Dir.D
+    p.move_d()
+    assert(p.state.equals(new State(Dir.R,
+                                    bottom_row_of(2),
+                                    left_col_of(2)))
+           , "bottom 6 not working")
+
+    p.state.dir = Dir.L
+    p.move_l()
+    assert(p.state.equals(new State(Dir.U,
+                                    orig_row,
+                                    orig_col))
+           , "left 2 not working")
+  }
+
+  { // Test right 6 & right 1
+    let orig_row = bottom_row_of(6) - 1
+    let orig_col = right_col_of(6)
+    p.state.row = orig_row
+    p.state.col = orig_col
+    p.state.dir = Dir.R
+    p.move_r()
+
+    assert(p.state.equals(new State(Dir.L,
+                                    top_row_of(1) + 1,
+                                    right_col_of(1)))
+           , "right 6 not working")
+
+    p.state.dir = Dir.R
+    p.move_r()
+    assert(p.state.equals(new State(Dir.L,
+                                    orig_row,
+                                    orig_col))
+           , "right 1 not working")
+  }
 }
-
-{ // Test bottom 3 & left 5
-  let orig_row = bottom_row_of(3)
-  let orig_col = left_col_of(3)
-  p.state.row = orig_row
-  p.state.col = orig_col
-  p.state.dir = Dir.D
-  p.move_d()
-  assert(p.state.equals(new State(Dir.R,
-                                  bottom_row_of(5),
-                                  left_col_of(5)))
-         , "bottom 3 not working")
-
-  p.state.dir = Dir.L
-  p.move_l()
-  assert(p.state.equals(new State(Dir.U,
-                                  orig_row,
-                                  orig_col))
-         , "bottom 5 not working")
-}
-
-{ // Test bottom 6 & left 2
-  let orig_row = bottom_row_of(6)
-  let orig_col = left_col_of(6)
-  p.state.row = orig_row
-  p.state.col = orig_col
-  p.state.dir = Dir.D
-  p.move_d()
-  assert(p.state.equals(new State(Dir.R,
-                                  bottom_row_of(2),
-                                  left_col_of(2)))
-         , "bottom 6 not working")
-
-  p.state.dir = Dir.L
-  p.move_l()
-  assert(p.state.equals(new State(Dir.U,
-                                  orig_row,
-                                  orig_col))
-         , "left 2 not working")
-}
-
-{ // Test right 6 & right 1
-  let orig_row = bottom_row_of(6) - 1
-  let orig_col = right_col_of(6)
-  p.state.row = orig_row
-  p.state.col = orig_col
-  p.state.dir = Dir.R
-  p.move_r()
-
-  assert(p.state.equals(new State(Dir.L,
-                                  top_row_of(1) + 1,
-                                  right_col_of(1)))
-         , "right 6 not working")
-
-  p.state.dir = Dir.R
-  p.move_r()
-  assert(p.state.equals(new State(Dir.L,
-                                  orig_row,
-                                  orig_col))
-         , "right 1 not working")
-}*/
 
 p.perform_moves()
 display_map()
